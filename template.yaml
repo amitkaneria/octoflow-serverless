@@ -1,0 +1,170 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  takorun-sls
+
+  Takorun SLS Workflow execution stack
+
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+      - stage
+    Description:
+      Environment variable to deploy stack
+    ConstraintDescription:
+      Must be one of dev, prod or stage
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 3
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+
+Resources:
+  # --------------------------------------------------------------------------------------------------------------------
+  # Shared dependencies (Layer)
+  # --------------------------------------------------------------------------------------------------------------------
+
+  SharedUtils:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      ContentUri: dependencies
+      LayerName: dependencies-utils
+      CompatibleRuntimes:
+        - python3.8
+      Description: >
+        Shared utils layer to give setup utils available to import Helper functions
+
+
+  # --------------------------------------------------------------------------------------------------------------------
+  # Functions
+  # --------------------------------------------------------------------------------------------------------------------
+
+  TriggerWorkflow:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/trigger_workflow
+      FunctionName: !Sub ${Environment}-trigger-workflow
+      Layers:
+        - !Ref SharedUtils
+      Runtime: python3.8
+      Handler: main.lambda_handler
+      Events:
+        RestApi:
+          Type: Api
+          Properties:
+            Method: POST
+            Path: /trigger-workflow
+
+  ValidateWorkflow:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/validate_workflow
+      FunctionName: !Sub ${Environment}-validate-workflow
+      Layers:
+        - !Ref SharedUtils
+      Runtime: python3.8
+      Handler: main.lambda_handler
+
+  StepsExecutor:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/steps_executor
+      FunctionName: !Sub ${Environment}-steps-executor
+      Layers:
+        - !Ref SharedUtils
+      Runtime: python3.8
+      Handler: main.lambda_handler
+
+
+  # --------------------------------------------------------------------------------------------------------------------
+  # SNS Topics
+  # --------------------------------------------------------------------------------------------------------------------
+
+  # EventsSNS will subscribe to corresponding EventsSQS queue
+  EventsSNS:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub ${Environment}-events-topic
+      Subscription:
+        - Endpoint: !GetAtt EventsSQS.Arn
+          Protocol: sqs
+
+  # TasksSNS will subscribe to corresponding TasksSQS queue
+  TasksSNS:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub ${Environment}-tasks-topic
+      Subscription:
+        - Endpoint: !GetAtt TasksSQS.Arn
+          Protocol: sqs
+
+  # --------------------------------------------------------------------------------------------------------------------
+  # SQS Queues
+  # --------------------------------------------------------------------------------------------------------------------
+  EventsSQS:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${Environment}-events-queue
+
+  # Policy for EventsSQS
+  EventsSQSPolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref EventsSQS
+      PolicyDocument:
+        Id: AllowAccessFromEventsSNS
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action:
+              - sqs:SendMessage
+              - sqs:ReceiveMessage
+            Resource:
+              - !GetAtt EventsSQS.Arn
+
+  TasksSQS:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${Environment}-tasks-queue
+
+  # Policy for TasksSQS
+  TasksSQSPolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref TasksSQS
+      PolicyDocument:
+        Id: AllowAccessFromTasksSNS
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action:
+              - sqs:SendMessage
+              - sqs:ReceiveMessage
+            Resource:
+              - !GetAtt TasksSQS.Arn
+
+
+
+#Outputs:
+#  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
+#  # Find out more about other implicit resources you can reference within SAM
+#  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+#  HelloWorldApi:
+#    Description: "API Gateway endpoint URL for Prod stage for Hello World function"
+#    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/"
+#  HelloWorldFunction:
+#    Description: "Hello World Lambda Function ARN"
+#    Value: !GetAtt HelloWorldFunction.Arn
+#  HelloWorldFunctionIamRole:
+#    Description: "Implicit IAM Role created for Hello World function"
+#    Value: !GetAtt HelloWorldFunction.Arn
