@@ -56,6 +56,9 @@ Resources:
         - !Ref SharedUtils
       Runtime: python3.8
       Handler: main.lambda_handler
+      Environment:
+        Variables:
+          EVENTS_TOPIC_ARN: !Ref EventsSNS
       Events:
         RestApi:
           Type: Api
@@ -63,6 +66,8 @@ Resources:
             Method: POST
             Path: /trigger-workflow
       Policies:
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt EventsSNS.TopicName
         - DynamoDBReadPolicy:
             TableName: !Ref WorkflowTable
         - DynamoDBCrudPolicy:
