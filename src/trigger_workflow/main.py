@@ -10,8 +10,6 @@ from utils import Response
 # Create an SNS client
 sns = boto3.client("sns")
 
-EVENTS_TOPIC_ARN = os.environ.get("EVENTS_TOPIC_ARN")
-
 
 def send_to_events_queue(instance_id: str) -> Any:
     """
@@ -19,6 +17,7 @@ def send_to_events_queue(instance_id: str) -> Any:
     :param message:
     :return:
     """
+    EVENTS_TOPIC_ARN = os.environ.get("EVENTS_TOPIC_ARN")
     response = sns.publish(TopicArn=EVENTS_TOPIC_ARN, Message=instance_id)
     return response
 
@@ -40,14 +39,15 @@ def lambda_handler(event, context):
         data = json.loads(event.get("body"))
     except Exception as exc:
         print(f"Exception caught! :{exc}")
-        return Response({"message": "Failed to parse Json data", "reason": f"{exc}"}, 400)
+        return Response(
+            {"message": "Failed to parse Json data", "reason": f"{exc}"}, 400
+        )
 
     # Step 2: Validate Json
 
     # Step 3: Persist data!
 
     # Step 4: Send to SNS Topic for further processing
-    if EVENTS_TOPIC_ARN:
-        response = send_to_events_queue("pass_some_instance_id")
-        print(response)
+    response = send_to_events_queue("pass_some_instance_id")
+    print(response)
     return Response({"message": "I've got your back!", "input_data": data})
