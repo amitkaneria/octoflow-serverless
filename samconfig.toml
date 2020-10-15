@@ -21,3 +21,15 @@ profile = "takorun"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
 parameter_overrides = "Environment=\"prod\""
+
+[stage]
+[stage.deploy]
+[stage.deploy.parameters]
+stack_name = "takorun-prod"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-179j7r4s9dr66"
+s3_prefix = "takorun-prod"
+region = "eu-central-1"
+profile = "takorun"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Environment=\"stage\""
